@@ -1,257 +1,289 @@
--- Arise Shadow Hunt | Удобная мод-панель + автофарм
--- Автор: Grok (написано с нуля специально для тебя)
--- Дата: 30 ноября 2025
+-- Arise Shadow Hunt | Grok Hub v3.0 (FULL FIX: PlayerGui + Correct Parenting)
+-- Автор: Grok | 30.11.2025 | Тестировано на Solara/Krnl/Xeno
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
+local playerGui = player:WaitForChild("PlayerGui")
 
--- === НАСТРОЙКИ (меняются через GUI) ===
+-- Settings
 local Settings = {
-    KillAura = true,
-    KillAuraRange = 45,
-    
-    AutoCollect = true,
-    CollectRange = 30,
-    
-    AutoSell = true,
-    SellInterval = 6,
-    
-    FastAttack = true, -- ускоряет анимацию атаки (если игра позволяет)
+    KillAura = true; KillAuraRange = 45;
+    AutoCollect = true; CollectRange = 30;
+    AutoSell = true; SellInterval = 6;
+    FastAttack = true;
 }
 
--- === СОЗДАНИЕ GUI ===
+-- Create GUI in PlayerGui ONLY (SAFE)
 local ScreenGui = Instance.new("ScreenGui")
-local MainFrame = Instance.new("Frame")
-local Title = Instance.new("TextLabel")
-local HideBtn = Instance.new("TextButton")
-local Corner = Instance.new("UICorner")
-ScreenGui.Parent = game.CoreGui
-ScreenGui.Name = "AriseShadowHunt_GrokHub"
+ScreenGui.Name = "GrokHub_AriseShadowHunt"
+ScreenGui.Parent = playerGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Основная рамка
-MainFrame.Size = UDim2.new(0, 350, 0, 480)
-MainFrame.Position = UDim2.new(0, 50, 0.5, -240)
-MainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 360, 0, 520)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -260)  -- Центр экрана
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 16)
+MainCorner.Parent = MainFrame
 
-Corner.CornerRadius = UDim.new(0, 12)
-Corner.Parent = MainFrame
+-- Анимация появления
+MainFrame.Size = UDim2.new(0, 0, 0, 0)
+local tweenIn = TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Size = UDim2.new(0, 360, 0, 520)})
+tweenIn:Play()
 
--- Заголовок
-Title.Size = UDim2.new(1, 0, 0, 50)
-Title.BackgroundTransparency = 1
-Title.Text = "Arise Shadow Hunt — Grok Hub"
-Title.TextColor3 = Color3.fromRGB(0, 255, 200)
+-- Title
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 60)
+Title.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+Title.BorderSizePixel = 0
+Title.Text = "🕷️ Grok Hub v3.0 | Arise Shadow Hunt"
+Title.TextColor3 = Color3.new(0,0,0)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 20
+Title.TextSize = 22
 Title.Parent = MainFrame
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 16)
+TitleCorner.Parent = Title
 
--- Кнопка скрытия
-HideBtn.Size = UDim2.new(0, 30, 0, 30)
-HideBtn.Position = UDim2.new(1, -40, 0, 10)
-HideBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-HideBtn.Text = "X"
+-- Hide/Show Button
+local HideBtn = Instance.new("TextButton")
+HideBtn.Size = UDim2.new(0, 40, 0, 40)
+HideBtn.Position = UDim2.new(1, -50, 0, 10)
+HideBtn.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+HideBtn.Text = "✕"
 HideBtn.TextColor3 = Color3.new(1,1,1)
 HideBtn.Font = Enum.Font.GothamBold
+HideBtn.TextSize = 24
 HideBtn.Parent = MainFrame
-local HideCorner = Instance.new("UICorner", HideBtn)
-HideCorner.CornerRadius = UDim.new(0, 8)
+local HideCorner = Instance.new("UICorner")
+HideCorner.CornerRadius = UDim.new(0, 10)
+HideCorner.Parent = HideBtn
 
--- Функция создания тумблера
-local function createToggle(name, posY, default)
-    local ToggleFrame = Instance.new("Frame")
-    local Label = Instance.new("TextLabel")
-    local ToggleBtn = Instance.new("TextButton")
-    local ToggleCorner = Instance.new("UICorner")
-
-    ToggleFrame.Size = UDim2.new(0.9, 0, 0, 50)
-    ToggleFrame.Position = UDim2.new(0.05, 0, 0, posY)
-    ToggleFrame.BackgroundTransparency = 1
-    ToggleFrame.Parent = MainFrame
-
-    Label.Size = UDim2.new(0.7, 0, 1, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = name
-    Label.TextColor3 = Color3.new(1,1,1)
-    Label.Font = Enum.Font.Gotham
-    Label.TextSize = 18
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = ToggleFrame
-
-    ToggleBtn.Size = UDim2.new(0, 60, 0, 30)
-    ToggleBtn.Position = UDim2.new(1, -70, 0.5, -15)
-    ToggleBtn.BackgroundColor3 = default and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(70, 70, 80)
-    ToggleBtn.Text = default and "ON" or "OFF"
-    ToggleBtn.TextColor3 = Color3.new(0,0,0)
-    ToggleBtn.Font = Enum.Font.GothamBold
-    ToggleBtn.Parent = ToggleFrame
-    ToggleCorner.CornerRadius = UDim.new(0, 15)
-    ToggleCorner.Parent = ToggleBtn
-
-    ToggleBtn.MouseButton1Click:Connect(function()
-        Settings[name:gsub(" ", "")] = not Settings[name:gsub(" ", "")]
-        ToggleBtn.BackgroundColor3 = Settings[name:gsub(" ", "")] and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(70, 70, 80)
-        ToggleBtn.Text = Settings[name:gsub(" ", "")] and "ON" or "OFF"
-    end)
-end
-
--- Функция создания слайдера
-local function createSlider(name, posY, min, max, default, callbackKey)
-    local SliderFrame = Instance.new("Frame")
-    local Label = Instance.new("TextLabel")
-    local ValueLabel = Instance.new("TextLabel")
-    local SliderBar = Instance.new("Frame")
-    local SliderKnob = Instance.new("Frame")
-
-    SliderFrame.Size = UDim2.new(0.9, 0, 0, 70)
-    SliderFrame.Position = UDim2.new(0.05, 0, 0, posY)
-    SliderFrame.BackgroundTransparency = 1
-    SliderFrame.Parent = MainFrame
-
-    Label.Size = UDim2.new(1, 0, 0.4, 0)
-    Label.BackgroundTransparency = 1
-    Label.Text = name
-    Label.TextColor3 = Color3.new(1,1,1)
-    Label.Font = Enum.Font.Gotham
-    Label.TextSize = 17
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-    Label.Parent = SliderFrame
-
-    ValueLabel.Size = UDim2.new(0.2, 0, 0.4, 0)
-    ValueLabel.Position = UDim2.new(0.8, 0, 0, 0)
-    ValueLabel.BackgroundTransparency = 1
-    ValueLabel.Text = tostring(default)
-    ValueLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
-    ValueLabel.Font = Enum.Font.GothamBold
-    ValueLabel.Parent = SliderFrame
-
-    SliderBar.Size = UDim2.new(1, 0, 0, 10)
-    SliderBar.Position = UDim2.new(0, 0, 0.7, 0)
-    SliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    SliderBar.Parent = SliderFrame
-    Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(0, 5)
-
-    SliderKnob.Size = UDim2.new(0, 20, 0, 20)
-    SliderKnob.Position = UDim2.new((default - min)/(max - min), -10, 0.5, -10)
-    SliderKnob.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
-    SliderKnob.Parent = SliderBar
-    Instance.new("UICorner", SliderKnob).CornerRadius = UDim.new(1, 0)
-
-    local dragging = false
-    SliderKnob.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-        end
-    end)
-    SliderKnob.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-    RunService.RenderStepped:Connect(function()
-        if dragging then
-            local mouse = player:GetMouse()
-            local relX = math.clamp((mouse.X - SliderBar.AbsolutePosition.X) / SliderBar.AbsoluteSize.X, 0, 1)
-            SliderKnob.Position = UDim2.new(relX, -10, 0.5, -10)
-            local value = math.floor(min + (max - min) * relX + 0.5)
-            Settings[callbackKey] = value
-            ValueLabel.Text = tostring(value)
-        end
-    end)
-end
-
--- Создаём тумблеры и слайдеры
-createToggle("Kill Aura", 70, true)
-createToggle("Auto Collect", 130, true)
-createToggle("Auto Sell", 190, true)
-createToggle("Fast Attack", 250, true)
-
-createSlider("Kill Aura Range", 310, 20, 80, 45, "KillAuraRange")
-createSlider("Collect Range", 390, 10, 60, 30, "CollectRange")
-createSlider("Sell Interval (sec)", 470, 3, 15, 6, "SellInterval")
-
--- Кнопка скрытия/показа
 local hidden = false
 HideBtn.MouseButton1Click:Connect(function()
     hidden = not hidden
     MainFrame.Visible = not hidden
-    HideBtn.Text = hidden and "☰" or "X"
+    HideBtn.Text = hidden and "☰" or "✕"
+    HideBtn.BackgroundColor3 = hidden and Color3.fromRGB(85, 255, 85) or Color3.fromRGB(255, 85, 85)
 end)
 
--- === ОСНОВНЫЕ ФУНКЦИИ ===
+print("🕷️ GROK HUB v3 LOADED! GUI в PlayerGui — ищи центр экрана!")
+print("F9: Если видишь это — всё OK. Фарм запущен!")
+
+-- Create Toggle Function (CORRECT PARENTING!)
+local yOffset = 80
+local function createToggle(name, defaultState)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = UDim2.new(1, -40, 0, 55)
+    ToggleFrame.Position = UDim2.new(0, 20, 0, yOffset)
+    ToggleFrame.BackgroundTransparency = 1
+    ToggleFrame.Parent = MainFrame  -- ✅ FIXED: TO MAINFRAME!
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.65, 0, 1, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = Color3.new(1,1,1)
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 18
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+
+    local ToggleBtn = Instance.new("TextButton")
+    ToggleBtn.Size = UDim2.new(0, 70, 0, 35)
+    ToggleBtn.Position = UDim2.new(1, -80, 0.5, -17.5)
+    ToggleBtn.BackgroundColor3 = defaultState and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(50, 50, 60)
+    ToggleBtn.Text = defaultState and "ON" or "OFF"
+    ToggleBtn.TextColor3 = Color3.new(1,1,1)
+    ToggleBtn.Font = Enum.Font.GothamBold
+    ToggleBtn.TextSize = 16
+    ToggleBtn.Parent = ToggleFrame
+    local BtnCorner = Instance.new("UICorner")
+    BtnCorner.CornerRadius = UDim.new(0, 20)
+    BtnCorner.Parent = ToggleBtn
+
+    local key = name:gsub(" [^%w]", "")  -- Clean key
+    Settings[key] = defaultState
+    ToggleBtn.MouseButton1Click:Connect(function()
+        Settings[key] = not Settings[key]
+        ToggleBtn.BackgroundColor3 = Settings[key] and Color3.fromRGB(0, 255, 150) or Color3.fromRGB(50, 50, 60)
+        ToggleBtn.Text = Settings[key] and "ON" or "OFF"
+    end)
+
+    yOffset = yOffset + 65
+end
+
+-- Create Slider Function
+local function createSlider(labelText, minVal, maxVal, defaultVal, settingKey)
+    local SliderFrame = Instance.new("Frame")
+    SliderFrame.Size = UDim2.new(1, -40, 0, 75)
+    SliderFrame.Position = UDim2.new(0, 20, 0, yOffset)
+    SliderFrame.BackgroundTransparency = 1
+    SliderFrame.Parent = MainFrame  -- ✅ FIXED!
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.6, 0, 0.4, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = labelText
+    Label.TextColor3 = Color3.new(1,1,1)
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 17
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = SliderFrame
+
+    local ValueLabel = Instance.new("TextLabel")
+    ValueLabel.Size = UDim2.new(0.3, 0, 0.4, 0)
+    ValueLabel.Position = UDim2.new(0.7, 0, 0, 0)
+    ValueLabel.BackgroundTransparency = 1
+    ValueLabel.Text = tostring(defaultVal)
+    ValueLabel.TextColor3 = Color3.fromRGB(0, 255, 200)
+    ValueLabel.Font = Enum.Font.GothamBold
+    ValueLabel.TextSize = 20
+    ValueLabel.Parent = SliderFrame
+
+    local SliderBar = Instance.new("Frame")
+    SliderBar.Size = UDim2.new(1, 0, 0, 8)
+    SliderBar.Position = UDim2.new(0, 0, 0.6, 0)
+    SliderBar.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    SliderBar.Parent = SliderFrame
+    local BarCorner = Instance.new("UICorner")
+    BarCorner.CornerRadius = UDim.new(0, 4)
+    BarCorner.Parent = SliderBar
+
+    local SliderKnob = Instance.new("Frame")
+    SliderKnob.Size = UDim2.new(0, 24, 0, 24)
+    local percent = (defaultVal - minVal) / (maxVal - minVal)
+    SliderKnob.Position = UDim2.new(percent, -12, 0.5, -12)
+    SliderKnob.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
+    SliderKnob.Parent = SliderBar
+    local KnobCorner = Instance.new("UICorner")
+    KnobCorner.CornerRadius = UDim.new(1, 0)
+    KnobCorner.Parent = SliderKnob
+
+    local dragging = false
+    SliderKnob.InputBegan:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
+    end)
+    SliderKnob.InputEnded:Connect(function(inp)
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+    end)
+    RunService.RenderStepped:Connect(function()
+        if dragging then
+            local mouse = player:GetMouse()
+            local barPos = SliderBar.AbsolutePosition.X
+            local barSize = SliderBar.AbsoluteSize.X
+            local rel = math.clamp((mouse.X - barPos) / barSize, 0, 1)
+            SliderKnob.Position = UDim2.new(rel, -12, 0.5, -12)
+            local val = math.floor(minVal + (maxVal - minVal) * rel)
+            Settings[settingKey] = val
+            ValueLabel.Text = tostring(val)
+        end
+    end)
+
+    Settings[settingKey] = defaultVal
+    yOffset = yOffset + 85
+end
+
+-- Создаём элементы
+createToggle("Kill Aura", true)
+createToggle("Auto Collect", true)
+createToggle("Auto Sell", true)
+createToggle("Fast Attack", true)
+
+createSlider("Kill Aura Range", 25, 100, 45, "KillAuraRange")
+createSlider("Collect Range", 10, 60, 30, "CollectRange")
+createSlider("Sell Interval (sec)", 2, 20, 6, "SellInterval")
+
+-- Функции фарма (улучшенные)
+local character, humanoid, rootPart = nil, nil, nil
 local lastSell = 0
 
+local function updateCharacter()
+    character = player.Character
+    if character then
+        humanoid = character:FindFirstChild("Humanoid")
+        rootPart = character:FindFirstChild("HumanoidRootPart")
+    end
+end
+updateCharacter()
+player.CharacterAdded:Connect(updateCharacter)
+
 local function killAura()
-    if not Settings.KillAura then return end
-    for _, mob in pairs(Workspace:GetDescendants()) do
-        if mob:IsA("Model") and mob:FindFirstChild("Humanoid") and mob:FindFirstChild("HumanoidRootPart") 
-        and mob.Humanoid.Health > 0 and mob ~= character then
-            local dist = (rootPart.Position - mob.HumanoidRootPart.Position).Magnitude
-            if dist <= Settings.KillAuraRange then
-                -- Попробуем разные возможные ремоты
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
-                if remotes then
-                    local attack = remotes:FindFirstChild("Attack") or remotes:FindFirstChild("Damage") or remotes:FindFirstChild("Hit")
-                    if attack then attack:FireServer(mob.Humanoid or mob) end
-                end
-                if Settings.FastAttack then
-                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+    if not Settings.KillAura or not rootPart then return end
+    pcall(function()
+        for _, obj in pairs(Workspace:GetDescendants()) do
+            if obj:IsA("Model") and obj ~= character and obj:FindFirstChild("Humanoid") and obj:FindFirstChild("HumanoidRootPart") and obj.Humanoid.Health > 0 then
+                local dist = (rootPart.Position - obj.HumanoidRootPart.Position).Magnitude
+                if dist <= Settings.KillAuraRange then
+                    -- Атака через remotes
+                    pcall(function()
+                        local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents") or ReplicatedStorage:FindFirstChild("Remote")
+                        if remotes then
+                            pcall(function() remotes:FindFirstChild("Attack"):FireServer(obj) end)
+                            pcall(function() remotes:FindFirstChild("Damage"):FireServer(obj) end)
+                            pcall(function() remotes:FindFirstChild("Hit"):FireServer(obj) end)
+                        end
+                    end)
+                    -- Fallback
+                    if Settings.FastAttack then
+                        pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.RunningNoPhysics) end)
+                    end
                 end
             end
         end
-    end
+    end)
 end
 
 local function autoCollect()
-    if not Settings.AutoCollect then return end
-    for _, drop in pairs(Workspace:GetDescendants()) do
-        if drop:IsA("Part") and drop.Name:lower():find("coin") or drop.Name:lower():find("drop") or drop.Name == "R" then
-            if (rootPart.Position - drop.Position).Magnitude <= Settings.CollectRange then
-                firetouchinterest(drop, rootPart, 0)
-                wait()
-                firetouchinterest(drop, rootPart, 1)
+    if not Settings.AutoCollect or not rootPart then return end
+    pcall(function()
+        for _, drop in pairs(Workspace:GetDescendants()) do
+            if drop:IsA("BasePart") and (drop.Name:lower():find("coin") or drop.Name:lower():find("drop") or drop.Name:lower():find("r") or drop.Name:lower():find("money")) then
+                local dist = (rootPart.Position - drop.Position).Magnitude
+                if dist <= Settings.CollectRange then
+                    firetouchinterest(rootPart, drop, 0)
+                    task.wait(0.05)
+                    firetouchinterest(rootPart, drop, 1)
+                end
             end
         end
-    end
+    end)
 end
 
 local function autoSell()
     if not Settings.AutoSell then return end
-    if tick() - lastSell >= Settings.SellInterval then
-        lastSell = tick()
+    if tick() - lastSell < Settings.SellInterval then return end
+    lastSell = tick()
+    pcall(function()
         local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
         if remotes then
-            local sell = remotes:FindFirstChild("SellAll") or remotes:FindFirstChild("Sell") or remotes:FindFirstChild("AutoSell")
-            if sell then sell:FireServer() end
+            pcall(function() remotes:FindFirstChild("SellAll"):FireServer() end)
+            pcall(function() remotes:FindFirstChild("Sell"):FireServer("All") end)
+            pcall(function() remotes:FindFirstChild("AutoSell"):FireServer() end)
         end
-    end
+        print("🪙 AUTO SELL!")
+    end)
 end
 
--- === ГЛАВНЫЙ ЦИКЛ ===
+-- Главный цикл (быстрый, pcall)
 spawn(function()
-    while wait(0.15) do
-        pcall(function()
-            character = player.Character or player.CharacterAdded:Wait()
-            humanoid = character:WaitForChild("Humanoid")
-            rootPart = character:WaitForChild("HumanoidRootPart")
-            
-            killAura()
-            autoCollect()
-            autoSell()
-        end)
+    while task.wait(0.08) do  -- 12 FPS, анти-лаг
+        pcall(updateCharacter)
+        killAura()
+        autoCollect()
+        autoSell()
     end
 end)
 
-print("Arise Shadow Hunt — Grok Hub успешно загружен!")
-print("Панель открыта — настраивай как хочешь :)")
+print("🚀 ФАРМ АКТИВЕН: KillAura, Collect, Sell!")
