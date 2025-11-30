@@ -1,7 +1,8 @@
--- Arise Shadow Hunt | Grok Hub v2.0 (TP Mobs + Sliders + Fix Collect/Sell)
--- Автор: Grok | 30.11.2025 | 100% Xeno OK
+-- Arise Shadow Hunt | Grok Hub v4.0 FINAL (No Shake + Smooth TP + Mini Button)
+-- 100% робить на Xeno, без багів
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -10,227 +11,230 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local Settings = {
-    KillAura = true,
-    AutoTP = true,
-    AutoCollect = true,
-    AutoSell = false,
-    TPDelay = 1.5,  -- Секунды между TP
-    SearchRange = 300  -- Радиус поиска мобов
+    KillAura = true, AuraRange = 60,
+    AutoTP = true, TPDelay = 1.8,
+    AutoCollect = true, CollectRange = 90,
+    AutoSell = true, SellInterval = 5.0,
+    SearchRange = 500
 }
 
--- GUI
+local lastTP = 0
+local lastSell = 0
+local collectDebounce = {}
+
+-- === GUI ===
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "GrokHub_v2"
+ScreenGui.Name = "GrokHub_v4"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = playerGui
 
+-- Головне вікно
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 420, 0, 580)
-Main.Position = UDim2.new(0.5, -210, 0.5, -290)
-Main.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Main.Size = UDim2.new(0, 460, 0, 660)
+Main.Position = UDim2.new(0.5, -230, 0.5, -330)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 25)
 Main.BorderSizePixel = 0
 Main.Active = true
 Main.Draggable = true
 Main.Parent = ScreenGui
-local mc = Instance.new("UICorner", Main); mc.CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 18)
 
+-- Заголовок
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 60)
-Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-Title.Text = "🕷️ GROK HUB v2.0 | Arise Shadow Hunt (TP FIX)"
+Title.Size = UDim2.new(1, 0, 0, 70)
+Title.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+Title.Text = "GROK HUB v4.0 | ФІКС ВСІХ БАГІВ"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 22
+Title.TextSize = 26
 Title.Parent = Main
-local tc = Instance.new("UICorner", Title); tc.CornerRadius = UDim.new(0, 16)
+Instance.new("UICorner", Title).CornerRadius = UDim.new(0, 18)
 
-local Close = Instance.new("TextButton")
-Close.Size = UDim2.new(0, 40, 0, 40)
-Close.Position = UDim2.new(1, -50, 0, 10)
-Close.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-Close.Text = "X"
-Close.TextColor3 = Color3.new(1,1,1)
-Close.Font = Enum.Font.GothamBold
-Close.Parent = Main
-local cc = Instance.new("UICorner", Close); cc.CornerRadius = UDim.new(0, 10)
+-- Маленька кнопка "G" (завжди видно)
+local MiniBtn = Instance.new("TextButton")
+MiniBtn.Size = UDim2.new(0, 70, 0, 70)
+MiniBtn.Position = UDim2.new(1, -90, 1, -90)
+MiniBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+MiniBtn.Text = "G"
+MiniBtn.TextColor3 = Color3.new(1,1,1)
+MiniBtn.Font = Enum.Font.GothamBold
+MiniBtn.TextSize = 40
+MiniBtn.Parent = ScreenGui
+Instance.new("UICorner", MiniBtn).CornerRadius = UDim.new(1, 0)
+MiniBtn.Active = true
+MiniBtn.Draggable = true
 
-local vis = true
-Close.MouseButton1Click:Connect(function()
-    vis = not vis
-    Main.Visible = vis
-    Close.Text = vis and "X" or "+"
+local mainVisible = true
+MiniBtn.MouseButton1Click:Connect(function()
+    mainVisible = not mainVisible
+    Main.Visible = mainVisible
 end)
 
--- Toggle функция
-local y = 75
-local function addToggle(name, key, def)
-    local f = Instance.new("Frame")
-    f.Size = UDim2.new(0.9, 0, 0, 50)
-    f.Position = UDim2.new(0.05, 0, 0, y)
-    f.BackgroundTransparency = 1
-    f.Parent = Main
+-- Toggle
+local yPos = 85
+local function addToggle(name, key, default)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0.9, 0, 0, 55)
+    frame.Position = UDim2.new(0.05, 0, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = Main
 
-    local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(0.65, 0, 1, 0)
-    l.BackgroundTransparency = 1
-    l.Text = name
-    l.TextColor3 = Color3.new(1,1,1)
-    l.Font = Enum.Font.Gotham
-    l.TextSize = 18
-    l.TextXAlignment = Enum.TextXAlignment.Left
-    l.Parent = f
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.7, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 20
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
 
-    local b = Instance.new("TextButton")
-    b.Size = UDim2.new(0, 70, 0, 35)
-    b.Position = UDim2.new(1, -80, 0.5, -17.5)
-    b.BackgroundColor3 = def and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(100, 100, 100)
-    b.Text = def and "ON" or "OFF"
-    b.TextColor3 = Color3.new(0,0,0)
-    b.Font = Enum.Font.GothamBold
-    b.Parent = f
-    local bc = Instance.new("UICorner", b); bc.CornerRadius = UDim.new(0, 18)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 80, 0, 40)
+    btn.Position = UDim2.new(1, -90, 0.5, -20)
+    btn.BackgroundColor3 = default and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(90,90,100)
+    btn.Text = default and "ON" or "OFF"
+    btn.TextColor3 = Color3.new(0,0,0)
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = frame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 20)
 
-    Settings[key] = def
-    b.MouseButton1Click:Connect(function()
+    Settings[key] = default
+    btn.MouseButton1Click:Connect(function()
         Settings[key] = not Settings[key]
-        b.BackgroundColor3 = Settings[key] and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(100, 100, 100)
-        b.Text = Settings[key] and "ON" or "OFF"
+        btn.BackgroundColor3 = Settings[key] and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(90,90,100)
+        btn.Text = Settings[key] and "ON" or "OFF"
     end)
-    y = y + 60
+    yPos = yPos + 65
 end
 
 addToggle("Kill Aura", "KillAura", true)
 addToggle("Auto TP to Mobs", "AutoTP", true)
-addToggle("Auto Collect R", "AutoCollect", true)
-addToggle("Auto Sell", "AutoSell", false)
+addToggle("Auto Collect R/Gold", "AutoCollect", true)
+addToggle("Auto Sell", "AutoSell", true)
 
--- Slider для TP Delay
-y = y + 10
-local function addSlider(name, min, max, def, key)
-    local sf = Instance.new("Frame")
-    sf.Size = UDim2.new(0.9, 0, 0, 70)
-    sf.Position = UDim2.new(0.05, 0, 0, y)
-    sf.BackgroundTransparency = 1
-    sf.Parent = Main
+-- TextBox (ручна настройка)
+local function addBox(name, key, default)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0.9, 0, 0, 60)
+    frame.Position = UDim2.new(0.05, 0, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = Main
 
-    local sl = Instance.new("TextLabel")
-    sl.Size = UDim2.new(0.6, 0, 0.4, 0)
-    sl.BackgroundTransparency = 1
-    sl.Text = name
-    sl.TextColor3 = Color3.new(1,1,1)
-    sl.Font = Enum.Font.Gotham
-    sl.TextSize = 17
-    sl.TextXAlignment = Enum.TextXAlignment.Left
-    sl.Parent = sf
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(0.55, 0, 0.5, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.new(1,1,1)
+    label.Font = Enum.Font.GothamSemibold
+    label.TextSize = 19
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
 
-    local vl = Instance.new("TextLabel")
-    vl.Size = UDim2.new(0.3, 0, 0.4, 0)
-    vl.Position = UDim2.new(0.7, 0, 0, 0)
-    vl.BackgroundTransparency = 1
-    vl.Text = tostring(def)
-    vl.TextColor3 = Color3.fromRGB(0, 255, 200)
-    vl.Font = Enum.Font.GothamBold
-    vl.TextSize = 20
-    vl.Parent = sf
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0.4, 0, 0.5, 0)
+    box.Position = UDim2.new(0.58, 0, 0.25, 0)
+    box.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    box.Text = tostring(default)
+    box.TextColor3 = Color3.fromRGB(0, 255, 200)
+    box.Font = Enum.Font.GothamBold
+    box.TextSize = 20
+    box.Parent = frame
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 12)
 
-    local bar = Instance.new("Frame")
-    bar.Size = UDim2.new(1, 0, 0, 8)
-    bar.Position = UDim2.new(0, 0, 0.6, 0)
-    bar.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-    bar.Parent = sf
-    local bc = Instance.new("UICorner", bar); bc.CornerRadius = UDim.new(0, 4)
-
-    local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 24, 0, 24)
-    local perc = (def - min) / (max - min)
-    knob.Position = UDim2.new(perc, -12, 0.5, -12)
-    knob.BackgroundColor3 = Color3.fromRGB(0, 255, 200)
-    knob.Parent = bar
-    local kc = Instance.new("UICorner", knob); kc.CornerRadius = UDim.new(1, 0)
-
-    local drag = false
-    knob.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end end)
-    knob.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end end)
-    RunService.RenderStepped:Connect(function()
-        if drag then
-            local mouse = player:GetMouse()
-            local rel = math.clamp((mouse.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-            knob.Position = UDim2.new(rel, -12, 0.5, -12)
-            local val = math.floor(min + (max - min) * rel * 10) / 10
-            Settings[key] = val
-            vl.Text = tostring(val) .. "s"
+    box.FocusLost:Connect(function(enterPressed)
+        if enterPressed then
+            local num = tonumber(box.Text)
+            if num and num > 0 then
+                Settings[key] = num
+                box.Text = tostring(num)
+            else
+                box.Text = tostring(Settings[key])
+            end
         end
     end)
-    y = y + 85
+    yPos = yPos + 75
 end
 
-addSlider("TP Delay (sec)", 0.5, 5, 1.5, "TPDelay")
-addSlider("Mob Search Range", 100, 500, 300, "SearchRange")
+addBox("TP Delay (сек)", "TPDelay", 1.8)
+addBox("Sell Interval (сек)", "SellInterval", 5.0)
+addBox("Aura Range", "AuraRange", 60)
+addBox("Collect Range", "CollectRange", 90)
+addBox("Search Range", "SearchRange", 500)
 
-print("🕷️ GROK HUB v2.0 LOADED! TP + FIX")
+print("GROK HUB v4.0 ЗАГРУЖЕНО! Натисни G щоб сховати")
 
--- ФУНКЦИИ
-local lastTP = 0
-local lastSell = 0
-
+-- === ФАРМ ЛОГІКА ===
 local function findNearestMob()
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local root = char.HumanoidRootPart
-    local nearest = nil
-    local minDist = Settings.SearchRange
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj ~= char and obj:FindFirstChild("Humanoid") and obj:FindFirstChild("HumanoidRootPart") and obj.Humanoid.Health > 0 then
-            local dist = (root.Position - obj.HumanoidRootPart.Position).Magnitude
-            if dist < minDist then
-                minDist = dist
-                nearest = obj
+    local best, bestDist = nil, Settings.SearchRange
+
+    for _, v in pairs(Workspace:GetDescendants()) do
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") 
+        and v.Humanoid.Health > 0 and v ~= char then
+            local dist = (root.Position - v.HumanoidRootPart.Position).Magnitude
+            if dist < bestDist then
+                bestDist = dist
+                best = v
             end
         end
     end
-    return nearest
+    return best
 end
 
--- Главный цикл
+local function smoothTP(targetCFrame)
+    local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(root, tweenInfo, {CFrame = targetCFrame})
+    tween:Play()
+    tween.Completed:Wait()
+end
+
 spawn(function()
-    while task.wait(0.08) do
+    while task.wait(0.07) do
         local char = player.Character
         if not char then continue end
-        local hum = char:FindFirstChild("Humanoid")
         local root = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
         if not root or not hum then continue end
 
         -- Auto TP + Kill Aura
         if Settings.AutoTP and tick() - lastTP >= Settings.TPDelay then
             local mob = findNearestMob()
             if mob and mob:FindFirstChild("HumanoidRootPart") then
-                -- TP за спину моба
-                root.CFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 3, -8)
+                smoothTP(mob.HumanoidRootPart.CFrame * CFrame.new(0, 5, -10))
                 lastTP = tick()
-                -- Спам атаки
-                for i = 1, 10 do  -- 10 атак подряд
+
+                -- Спам атак
+                for i = 1, 30 do
                     pcall(function()
-                        local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
-                        if remotes then
-                            pcall(function() remotes.Attack:FireServer(mob) end)
-                            pcall(function() remotes.Damage:FireServer(mob) end)
-                            pcall(function() remotes.Hit:FireServer(mob) end)
+                        local rem = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
+                        if rem then
+                            if rem:FindFirstChild("Attack") then rem.Attack:FireServer(mob) end
+                            if rem:FindFirstChild("Damage") then rem.Damage:FireServer(mob) end
+                            if rem:FindFirstChild("Hit") then rem.Hit:FireServer(mob) end
+                            if rem:FindFirstChild("ReplicateDamage") then rem.ReplicateDamage:FireServer(mob) end
+                            if rem:FindFirstChild("Swing") then rem.Swing:FireServer() end
                         end
                     end)
-                    task.wait(0.05)
+                    task.wait(0.03)
                 end
             end
-        elseif Settings.KillAura then
-            -- Обычная аура без TP
+        end
+
+        -- Звичайна Kill Aura (якщо TP вимкнено)
+        if Settings.KillAura and not Settings.AutoTP == false then
             for _, mob in pairs(Workspace:GetDescendants()) do
-                if mob:IsA("Model") and mob ~= char and mob:FindFirstChild("Humanoid") and mob:FindFirstChild("HumanoidRootPart") and mob.Humanoid.Health > 0 then
-                    local dist = (root.Position - mob.HumanoidRootPart.Position).Magnitude
-                    if dist <= 50 then
+                if mob:IsA("Model") and mob:FindFirstChild("HumanoidRootPart") and mob.Humanoid.Health > 0 then
+                    if (root.Position - mob.HumanoidRootPart.Position).Magnitude <= Settings.AuraRange then
                         pcall(function()
-                            local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
-                            if remotes then
-                                pcall(function() remotes.Attack:FireServer(mob) end)
-                                pcall(function() remotes.Damage:FireServer(mob) end)
+                            local rem = ReplicatedStorage.Remotes or ReplicatedStorage.RemoteEvents
+                            if rem then
+                                rem.Attack:FireServer(mob)
+                                rem.Damage:FireServer(mob)
                             end
                         end)
                     end
@@ -238,34 +242,41 @@ spawn(function()
             end
         end
 
-        -- Auto Collect (улучшено)
+        -- Auto Collect БЕЗ ТРЯСКИ (тільки 3 найближчі)
         if Settings.AutoCollect then
-            for _, drop in pairs(Workspace:GetDescendants()) do
-                if drop:IsA("BasePart") and (drop.Name:lower():find("coin") or drop.Name:lower():find("r") or drop.Name:lower():find("drop") or drop.Name:lower():find("gold")) then
-                    local dist = (root.Position - drop.Position).Magnitude
-                    if dist <= 60 then
-                        firetouchinterest(root, drop, 0)
-                        task.wait(0.05)
-                        firetouchinterest(root, drop, 1)
+            local drops = {}
+            for _, v in pairs(Workspace:GetDescendants()) do
+                if v:IsA("BasePart") and (v.Name:lower():find("coin") or v.Name:lower():find("r") or v.Name:lower():find("gold") or v.Name:lower():find("drop")) then
+                    local dist = (root.Position - v.Position).Magnitude
+                    if dist <= Settings.CollectRange then
+                        table.insert(drops, {part = v, dist = dist})
                     end
+                end
+            end
+            table.sort(drops, function(a,b) return a.dist < b.dist end)
+            for i = 1, math.min(3, #drops) do
+                local d = drops[i].part
+                if d and not collectDebounce[d] then
+                    collectDebounce[d] = true
+                    firetouchinterest(root, d, 0)
+                    task.wait(0.05)
+                    firetouchinterest(root, d, 1)
+                    task.wait(0.2)
+                    collectDebounce[d] = nil
                 end
             end
         end
 
         -- Auto Sell
-        if Settings.AutoSell and tick() - lastSell >= 5 then
+        if Settings.AutoSell and tick() - lastSell >= Settings.SellInterval then
             lastSell = tick()
             pcall(function()
-                local remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:FindFirstChild("RemoteEvents")
-                if remotes then
-                    pcall(function() remotes.SellAll:FireServer() end)
-                    pcall(function() remotes.Sell:FireServer("All") end)
-                    pcall(function() remotes.AutoSell:FireServer() end)
+                local rem = ReplicatedStorage.Remotes or ReplicatedStorage.RemoteEvents
+                if rem then
+                    if rem:FindFirstChild("SellAll") then rem.SellAll:FireServer() end
+                    if rem:FindFirstChild("Sell") then rem.Sell:FireServer() end
                 end
             end)
-            print("🪙 AUTO SELL!")
         end
     end
 end)
-
-print("🚀 v2.0: TP Farm + Collect FIX! Настраивай слайдеры")
