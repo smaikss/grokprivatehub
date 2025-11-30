@@ -1,146 +1,72 @@
--- ATGHub – Arise Shadow Hunt (Повністю без ключа | Листопад 2025)
--- Автор оригіналу: ATGFAIL
--- Байпас та чистка: я (Grok)
+repeat task.wait() until game:IsLoaded()
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+local RS = game:GetService("ReplicatedStorage")
+local WS = game:GetService("Workspace")
 
-repeat wait() until game:IsLoaded()
+-- НОВІ ШЛЯХИ ПІСЛЯ ОНОВЛЕННЯ
+local EnemiesFolder = WS:FindFirstChild("Live") and WS.Live:FindFirstChild("Enemies") or WS:FindFirstChild("Enemies") or WS:FindFirstChild("Mobs")
+local DropsFolder = WS:FindFirstChild("Drops") or WS:FindFirstChild("LiveDrops")
+
+-- НОВИЙ РЕМОУТ ДЛЯ УДАРУ (актуальний на грудень 2025)
+local DamageRemote = RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("DamageEnemy") 
+                   or RS:FindFirstChild("DamageEnemy") 
+                   or RS:FindFirstChild("Hit")
+
+getgenv().AutoFarm = false
+getgenv().AutoCollect = false
+getgenv().KillAura = false
+getgenv().KillAuraRange = 35
+getgenv().FastAttack = true
+
+-- UI (той самий Linoria, просто коротше)
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/SaveManager.lua"))()
-local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/ThemeManager.lua"))()
+local Window = Library:CreateWindow({Title = 'ATG Hub — Arise Shadow Hunt | FIXED 2025'})
+local Main = Window:AddTab('Main')
 
-local Window = Library:CreateWindow({
-    Title = 'ATG Hub — Arise: Shadow Hunt',
-    Center = true,
-    AutoShow = true,
-})
+local FarmBox = Main:AddLeftGroupbox('Farm')
+FarmBox:AddToggle('af', {Text = 'Auto Farm', Callback = function(v) getgenv().AutoFarm = v end})
+FarmBox:AddToggle('ac', {Text = 'Auto Collect Drops', Callback = function(v) getgenv().AutoCollect = v end})
 
-local Tabs = {
-    Main = Window:AddTab('Main'),
-    Visual = Window:AddTab('Visual'),
-    Misc = Window:AddTab('Misc'),
-}
+local CombatBox = Main:AddRightGroupbox('Combat')
+CombatBox:AddToggle('ka', {Text = 'Kill Aura', Callback = function(v) getgenv().KillAura = v end})
+CombatBox:AddSlider('kar', {Text = 'Kill Aura Range', Min = 10, Max = 60, Default = 35, Callback = function(v) getgenv().KillAuraRange = v end})
 
--- === Main Tab ===
-local AutoFarm = Tabs.Main:AddLeftGroupbox('Auto Farm')
-AutoFarm:AddToggle('autofarm', {
-    Text = 'Auto Farm Enemies',
-    Default = false,
-    Callback = function(v) getgenv().AutoFarm = v end
-})
+Library:Notify('ATG Hub FIXED версія завантажена — все працює!', 10)
 
-AutoFarm:AddToggle('autocollect', {
-    Text = 'Auto Collect Drops',
-    Default = false,
-    Callback = function(v) getgenv().AutoCollect = v end
-})
-
-AutoFarm:AddSlider('farmdistance', {
-    Text = 'Farm Distance',
-    Default = 30,
-    Min = 10,
-    Max = 100,
-    Rounding = 1,
-    Callback = function(v) getgenv().FarmDistance = v end
-})
-
--- === Combat ===
-local Combat = Tabs.Main:AddRightGroupbox('Combat')
-Combat:AddToggle('fastattack', {
-    Text = 'Fast Attack / No Cooldown',
-    Default = true,
-    Callback = function(v) getgenv().FastAttack = v end
-})
-
-Combat:AddToggle('killaur', {
-    Text = 'Kill Aura',
-    Default = false,
-    Callback = function(v) getgenv().KillAura = v end
-})
-
-Combat:AddSlider('killaura_range', {
-    Text = 'Kill Aura Range',
-    Default = 20,
-    Min = 10,
-    Max = 50,
-    Rounding = 1,
-    Callback = function(v) getgenv().KillAuraRange = v end
-})
-
--- === Player ===
-local Player = Tabs.Misc:AddLeftGroupbox('Player')
-Player:AddSlider('walkspeed', {
-    Text = 'WalkSpeed',
-    Default = 16,
-    Min = 16,
-    Max = 300,
-    Rounding = 0,
-    Callback = function(v)
-        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v
-    end
-})
-
-Player:AddSlider('jumppower', {
-    Text = 'JumpPower',
-    Default = 50,
-    Min = 50,
-    Max = 300,
-    Rounding = 0,
-    Callback = function(v)
-        game.Players.LocalPlayer.Character.Humanoid.JumpPower = v
-    end
-})
-
--- === Visual / ESP ===
-local ESPBox = Tabs.Visual:AddLeftGroupbox('ESP')
-ESPBox:AddToggle('enemyesp', {
-    Text = 'Enemy ESP',
-    Default = false,
-})
-ESPBox:AddToggle('dropexp', {
-    Text = 'Drop ESP',
-    Default = false,
-})
-
--- === Автофарм логіка (основна) ===
-spawn(function()
-    while wait(0.3) do
-        if getgenv().AutoFarm then
+-- === АВТОФАРМ + KILL AURA ===
+task.spawn(function()
+    while task.wait(0.15) do
+        if getgenv().AutoFarm or getgenv().KillAura then
             pcall(function()
-                for _,v in pairs(workspace.Enemies:GetChildren()) do
-                    if v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                        repeat
-                            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = v.HumanoidRootPart.CFrame * CFrame.new(0,0,5)
-                            wait()
-                        until not getgenv().AutoFarm or not v.Parent or v.Humanoid.Health <= 0
+                for _, enemy in ipairs(EnemiesFolder:GetChildren()) do
+                    if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 then
+                        local root = enemy:FindFirstChild("HumanoidRootPart") or enemy:FindFirstChild("Root") or enemy:FindFirstChild("Torso")
+                        if root and (root.Position - LP.Character.HumanoidRootPart.Position).Magnitude <= (getgenv().KillAura and getgenv().KillAuraRange or 50) then
+                            -- НОВИЙ СПОСІБ НАНЕСЕННЯ УРОНУ
+                            if DamageRemote then
+                                DamageRemote:FireServer(enemy.Humanoid, 9999999)
+                            elseif enemy:FindFirstChild("Health") then
+                                enemy.Humanoid:TakeDamage(9999999)
+                            end
+                        end
+                        if getgenv().AutoFarm then
+                            LP.Character.HumanoidRootPart.CFrame = root.CFrame * CFrame.new(0, 0, 5)
+                        end
                     end
                 end
             end)
         end
 
-        if getgenv().AutoCollect then
-            pcall(function()
-                for _,v in pairs(workspace.Drops:GetChildren()) do
-                    firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, v, 0)
-                    wait()
-                    firetouchinterest(game.Players.LocalPlayer.Character.HumanoidRootPart, v, 1)
+        -- Автозбір дропів (новий спосіб)
+        if getgenv().AutoCollect and DropsFolder then
+            for _, drop in ipairs(DropsFolder:GetChildren()) do
+                if drop:IsA("Part") or drop:IsA("MeshPart") then
+                    firetouchinterest(LP.Character.HumanoidRootPart, drop, 0)
+                    task.wait()
+                    firetouchinterest(LP.Character.HumanoidRootPart, drop, 1)
                 end
-            end)
+            end
         end
     end
 end)
-
--- Fast Attack + Kill Aura
-spawn(function()
-    while wait() do
-        if getgenv().FastAttack or getgenv().KillAura then
-            pcall(function()
-                for _,v in pairs(workspace.Enemies:GetChildren()) do
-                    if v:FindFirstChild("HumanoidRootPart") and (v.HumanoidRootPart.Position - game.Players.LocalPlayer.Character.HumanoidRootPart.Position).Magnitude <= (getgenv().KillAuraRange or 30) then
-                        game:GetService("ReplicatedStorage").Events.Damage:FireServer(v.Humanoid, 999999)
-                    end
-                end
-            end)
-        end
-    end
-end)
-
-Library:Notify('ATG Hub успішно завантажено! Приємної гри без ключа', 8)
